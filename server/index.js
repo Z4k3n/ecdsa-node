@@ -1,20 +1,20 @@
-const express = require("express");
-const app = express();
-const cors = require("cors");
-const port = 3042;
+import express from "express";
+import cors from "cors";
+import { secp256k1 } from "ethereum-cryptography/secp256k1";
+import { keccak256 } from "ethereum-cryptography/keccak";
+import { utf8ToBytes, toHex, hexToBytes } from "ethereum-cryptography/utils";
 
-const secp = require("ethereum-cryptography/secp256k1");
-const { keccak256 } = require("ethereum-cryptography/keccak");
-const { utf8ToBytes, toHex, hexToBytes } = require("ethereum-cryptography/utils");
+const app = express();
+const port = 3042;
 
 app.use(cors());
 app.use(express.json());
 
-// Pre-generated wallets with matching private keys and addresses
+// Pre-generated wallets
 const wallets = [
   {
     privateKey: "4f3edf983ac636a65a842ce7c78d9aa706d3b113b37c15a68d41f4a94e8e2726",
-    address: "0x90f8bf6a479f320ead074411a4b0e7944ea8c9c1",
+    address: "0x62994a5c8a10748092189f60504e9f449ebee58d",
     balance: 100,
   },
   {
@@ -24,7 +24,7 @@ const wallets = [
   },
   {
     privateKey: "c88b703fb08cbea894b6aeff0a88f5d88e0d978a8035f70b0bb7d4e4d5f0a392",
-    address: "0x627306090abab3a6e1400e9345bc60c78a8bef57",
+    address: "0x3509230efa1e9c68509986ab37dc691c3f91cc80",
     balance: 75,
   },
 ];
@@ -35,12 +35,11 @@ wallets.forEach(({ address, balance }) => {
   balances[address.toLowerCase()] = balance;
 });
 
-// Helper to sort object keys for consistent message hashing
 function sortedJSONStringify(obj) {
   return JSON.stringify(Object.fromEntries(Object.entries(obj).sort()));
 }
 
-// Endpoint: Get balance
+// GET balance
 app.get("/balance/:address", (req, res) => {
   const address = req.params.address.toLowerCase();
   const balance = balances[address] || 0;
@@ -48,16 +47,25 @@ app.get("/balance/:address", (req, res) => {
   res.send({ balance });
 });
 
-// Endpoint: Send tokens
+// POST send
 app.post("/send", async (req, res) => {
   const { recipient, amount, signature, recoveryBit, message } = req.body;
 
   console.log("Incoming transaction request:", { recipient, amount, message });
 
   try {
+    let signatureBytes;
+    if (typeof signature === "string") {
+      signatureBytes = hexToBytes(signature);
+    } else if (signature instanceof Uint8Array) {
+      signatureBytes = signature;
+    } else {
+      throw new Error("Invalid signature format");
+    }
+
     const messageHash = keccak256(utf8ToBytes(sortedJSONStringify(message)));
 
-    const publicKey = secp.recoverPublicKey(messageHash, signature, recoveryBit);
+    const publicKey = secp256k1.recoverPublicKey(messageHash, signatureBytes, recoveryBit);
     const senderAddress = "0x" + toHex(keccak256(publicKey.slice(1)).slice(-20));
     const sender = senderAddress.toLowerCase();
     const receiver = recipient.toLowerCase();
@@ -79,12 +87,14 @@ app.post("/send", async (req, res) => {
     res.send({ balance: balances[sender] });
   } catch (err) {
     console.error("Transaction failed:", err.message);
-    res.status(400).send({ message: "Invalid signature or request." });
+    res.status(400).send({ message: "Invalid signature or request.", detail: err.message });
   }
 });
 
-// Endpoint: Get wallet address and balance from private key
+// POST wallet-info
 app.post("/wallet-info", (req, res) => {
+  console.log("Body recibido:", req.body);
+
   let { privateKey } = req.body;
 
   try {
@@ -97,18 +107,20 @@ app.post("/wallet-info", (req, res) => {
       throw new Error("Private key must be 64 hex characters");
     }
 
-    console.log("Received private key:", cleanKey);
+    console.log("🔑 Received private key:", cleanKey);
 
     const privateKeyBytes = hexToBytes(cleanKey);
-    const publicKey = secp.getPublicKey(privateKeyBytes);
+    const publicKey = secp256k1.getPublicKey(privateKeyBytes, false);
     const address = "0x" + toHex(keccak256(publicKey.slice(1)).slice(-20));
     const balance = balances[address.toLowerCase()] || 0;
 
-    console.log(`Derived address: ${address}, Balance: ${balance}`);
+    console.log("📬 Derived address:", address);
+    console.log("💰 Wallet balance:", balance);
+
     res.send({ address, balance });
   } catch (err) {
-    console.error("Wallet info error:", err.message);
-    res.status(400).send({ message: "Invalid private key." });
+    console.error("❌ Wallet info error:", err.message);
+    res.status(400).send({ message: "Invalid private key.", detail: err.message });
   }
 });
 
@@ -116,7 +128,6 @@ app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
 
-// Initialize balances for unknown addresses
 function setInitialBalance(address) {
   if (!balances[address]) {
     balances[address] = 0;

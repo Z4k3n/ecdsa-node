@@ -1,43 +1,36 @@
 import { useState } from "react";
 import server from "./server";
-import * as secp from "ethereum-cryptography/secp256k1";
-import { toHex, hexToBytes } from "ethereum-cryptography/utils";
-import { keccak256 } from "ethereum-cryptography/keccak";
 
-function Wallet({ address, setAddress, balance, setBalance }) {
-  const [privateKey, setPrivateKey] = useState("");
+function Wallet({ address, setAddress, balance, setBalance, setPrivateKey }) {
+  const [localPrivateKey, setLocalPrivateKey] = useState("");
 
   async function handleAccessWallet() {
     try {
-      // Clean input: remove 0x prefix if exists, trim spaces, lowercase
-      const cleanKey = privateKey.trim().toLowerCase().replace(/^0x/, "");
+      const cleanKey = localPrivateKey.trim().toLowerCase().replace(/^0x/, "");
 
       if (cleanKey.length !== 64) {
         throw new Error("Private key must be 64 hex characters");
       }
 
-      // Convert private key from hex string to Uint8Array
-      const privateKeyBytes = hexToBytes(cleanKey);
+      // 🔁 Usar el endpoint del servidor para obtener address y balance
+      const {
+        data: { address: derivedAddress, balance },
+      } = await server.post("/wallet-info", {
+        privateKey: cleanKey,
+      });
 
-      // Derive the public key from the private key
-      const publicKey = secp.getPublicKey(privateKeyBytes);
-
-      // Derive the address by hashing the public key (drop format byte)
-      const hash = keccak256(publicKey.slice(1));
-      const derivedAddress = "0x" + toHex(hash.slice(-20));
+      console.log("🧾 Server-derived address:", derivedAddress);
+      console.log("💰 Server-derived balance:", balance);
 
       setAddress(derivedAddress);
-
-      // Fetch balance from server (make sure address is lowercase)
-      const {
-        data: { balance },
-      } = await server.get(`balance/${derivedAddress.toLowerCase()}`);
-
       setBalance(balance);
+      setPrivateKey(cleanKey);  // Actualizamos privateKey en el padre
     } catch (e) {
-      alert("Invalid private key or address derivation failed.");
-      setBalance(0);
+      console.error("❌ Error during wallet access:", e.message);
       setAddress("");
+      setBalance(0);
+      setPrivateKey("");
+      alert("Invalid private key or server error.");
     }
   }
 
@@ -49,8 +42,8 @@ function Wallet({ address, setAddress, balance, setBalance }) {
         Private Key
         <input
           placeholder="Enter your private key (hex format, 64 chars)"
-          value={privateKey}
-          onChange={(e) => setPrivateKey(e.target.value)}
+          value={localPrivateKey}
+          onChange={(e) => setLocalPrivateKey(e.target.value)}
         />
       </label>
 

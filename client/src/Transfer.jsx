@@ -1,8 +1,13 @@
 import { useState } from "react";
 import server from "./server";
-import * as secp from "ethereum-cryptography/secp256k1";
-import { toHex, utf8ToBytes } from "ethereum-cryptography/utils";
+import * as secp from "@noble/secp256k1";
+import { toHex, utf8ToBytes, hexToBytes } from "ethereum-cryptography/utils";
 import { keccak256 } from "ethereum-cryptography/keccak";
+
+// Función para serializar con claves ordenadas (igual que en backend)
+function sortedJSONStringify(obj) {
+  return JSON.stringify(Object.fromEntries(Object.entries(obj).sort()));
+}
 
 function Transfer({ address, setBalance, privateKey }) {
   const [sendAmount, setSendAmount] = useState("");
@@ -14,16 +19,35 @@ function Transfer({ address, setBalance, privateKey }) {
     evt.preventDefault();
 
     try {
+      console.log("🔐 Starting transfer...");
       const amount = parseInt(sendAmount);
+      if (!amount || amount <= 0) throw new Error("Invalid amount");
+      if (!recipient) throw new Error("Recipient required");
+      if (!privateKey) throw new Error("Private key missing");
 
-      // Create a message hash
-      const message = JSON.stringify({ amount, recipient });
-      const messageHash = keccak256(utf8ToBytes(message));
+      const message = { amount, recipient };
+      const messageString = sortedJSONStringify(message);
+      const messageHash = keccak256(utf8ToBytes(messageString));
 
-      // Sign the message hash with the private key
-      const [signature, recoveryBit] = await secp.sign(messageHash, privateKey, { recovered: true });
+      console.log("🧾 Message:", message);
+      console.log("🧾 Message string:", messageString);
+      console.log("🔑 Private key (hex):", privateKey);
 
-      // Send the transaction and signature to the server
+      const privateKeyBytes = hexToBytes(privateKey.replace(/^0x/, ""));
+
+      // Firmar mensaje
+      const signatureObj = await secp.sign(messageHash, privateKeyBytes, {
+        recovered: true,
+        der: false,
+      });
+
+      const signature = signatureObj[0];
+      const recoveryBit = signatureObj[1];
+
+      console.log("🖋 Signature:", toHex(signature));
+      console.log("📍 Recovery bit:", recoveryBit);
+
+      // Enviar al backend
       const {
         data: { balance },
       } = await server.post(`send`, {
@@ -32,9 +56,11 @@ function Transfer({ address, setBalance, privateKey }) {
         message,
       });
 
+      console.log("✅ Transfer success. New balance:", balance);
       setBalance(balance);
     } catch (ex) {
-      alert(ex.response?.data?.message || "Transfer failed");
+      console.error("❌ Transfer error:", ex);
+      alert(ex.response?.data?.message || ex.message || "Transfer failed");
     }
   }
 
