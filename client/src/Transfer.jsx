@@ -1,7 +1,10 @@
 import { useState } from "react";
 import server from "./server";
+import * as secp from "ethereum-cryptography/secp256k1";
+import { toHex, utf8ToBytes } from "ethereum-cryptography/utils";
+import { keccak256 } from "ethereum-cryptography/keccak";
 
-function Transfer({ address, setBalance }) {
+function Transfer({ address, setBalance, privateKey }) {
   const [sendAmount, setSendAmount] = useState("");
   const [recipient, setRecipient] = useState("");
 
@@ -11,16 +14,27 @@ function Transfer({ address, setBalance }) {
     evt.preventDefault();
 
     try {
+      const amount = parseInt(sendAmount);
+
+      // Create a message hash
+      const message = JSON.stringify({ amount, recipient });
+      const messageHash = keccak256(utf8ToBytes(message));
+
+      // Sign the message hash with the private key
+      const [signature, recoveryBit] = await secp.sign(messageHash, privateKey, { recovered: true });
+
+      // Send the transaction and signature to the server
       const {
         data: { balance },
       } = await server.post(`send`, {
-        sender: address,
-        amount: parseInt(sendAmount),
-        recipient,
+        signature: toHex(signature),
+        recoveryBit,
+        message,
       });
+
       setBalance(balance);
     } catch (ex) {
-      alert(ex.response.data.message);
+      alert(ex.response?.data?.message || "Transfer failed");
     }
   }
 
@@ -34,7 +48,7 @@ function Transfer({ address, setBalance }) {
           placeholder="1, 2, 3..."
           value={sendAmount}
           onChange={setValue(setSendAmount)}
-        ></input>
+        />
       </label>
 
       <label>
@@ -43,7 +57,7 @@ function Transfer({ address, setBalance }) {
           placeholder="Type an address, for example: 0x2"
           value={recipient}
           onChange={setValue(setRecipient)}
-        ></input>
+        />
       </label>
 
       <input type="submit" className="button" value="Transfer" />
