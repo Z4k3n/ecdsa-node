@@ -1,46 +1,42 @@
-# 🔐 ECDSA Wallet Transfer App – Secured Edition
+# 🔐 ECDSA Wallet Transfer App – Simulated Ethereum Edition
 
-This project is a secure and minimalistic implementation of wallet-based transactions using **Elliptic Curve Digital Signature Algorithm (ECDSA)**. It includes a React-based client and an Express.js server designed to simulate Ethereum-like behavior for educational purposes.
+This project is a secure, minimalistic simulation of Ethereum-style wallet transactions using **Elliptic Curve Digital Signature Algorithm (ECDSA)**. Built with a **React frontend** and an **Express backend**, it offers a practical and educational environment to understand how wallets, signatures, and transfers work—**without connecting to a real blockchain**.
+
+---
 
 ## 🌟 Key Features
 
-* Generate private/public key pairs using the `secp256k1` elliptic curve.
-* Automatically derive Ethereum-style wallet addresses (via Keccak-256 hashing).
-* Secure fund transfers with signed messages.
-* Server-side verification of digital signatures (no private key exposure).
-* Real-time balance updates after transactions.
-* Easy-to-follow, modular React components and clear backend structure.
+- 🔑 **Generate valid Ethereum-style wallet addresses** from private/public key pairs (`secp256k1` + `keccak256`).
+- 🧾 **Sign transactions client-side** with a private key (never sent to the server).
+- ✅ **Verify digital signatures server-side**, ensuring only valid transfers are accepted.
+- 💸 **Real-time balance tracking**: balances are updated based on successful signed transfers.
+- 🧪 **Fully interactive simulation** of value transfer using real cryptographic primitives.
+- 🧼 Clean UX: no automatic triggers—transactions require manual confirmation.
 
-## ✨ What This Fork Adds
+---
 
-This fork expands on the original educational repo by:
+## 🛠️ How It Works
 
-* Implementing **full ECDSA-based transaction verification**.
-* Replacing hardcoded dummy addresses (`0x1`, `0x2`, etc.) with **actual public keys**.
-* Enabling users to **generate and use private keys securely** (client-side).
-* Refactoring components for better UX (manual confirmation instead of auto-updates on input).
-* Adding **Ethereum-style address derivation** from public keys (with `keccak256`).
-* Designing a **testable app structure** with real use cases and dummy data.
+1. **Users input their private key** to derive their Ethereum-style address.
+2. **Transaction data (recipient + amount)** is signed on the client using ECDSA.
+3. The **server receives the signed payload**, verifies the signature, and processes the transaction if valid.
+4. **Balances are updated** in memory based on sender and recipient addresses.
 
-## 🔧 Getting Started
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-Make sure you have:
+- Node.js v16+  
+- npm
 
-* Node.js v16+ installed
-* `npm` installed globally
-
-### 1. Clone Your Fork
+### Clone and Install
 
 ```bash
-git clone https://github.com/your-username/ecdsa-wallet-app.git
-cd ecdsa-wallet-app
+git clone https://github.com/Z4k3n/ecdsa-node.git
+cd ecdsa-node
 ```
-
-### 2. Install Dependencies
-
-From the root:
 
 ```bash
 cd client
@@ -49,78 +45,80 @@ cd ../server
 npm install
 ```
 
-### 3. Run the App
+### Run the App
 
-#### Server
+**Start the server:**
 
 ```bash
 cd server
 node index.js
-# Or if you have nodemon:
-# nodemon index.js
+# or
+nodemon index.js
 ```
 
-#### Client
+**Start the client:**
 
 ```bash
 cd client
 npm run dev
 ```
 
-Visit [http://localhost:5173](http://localhost:5173) to use the app.
+Visit 👉 [http://localhost:5173](http://localhost:5173)
 
 ---
 
-## 🧲 Example Wallets
-
-These wallets were generated using `secp256k1`:
+## 🔍 Example Wallets (Simulation Only)
 
 ```js
-// Example private key:
-0x8f2a... // Keep this secret!
+// Example Private Key (DO NOT use on mainnet)
+0x8f2a...
 
-// Derived public key:
-0x045f9c... (compressed format used for balance lookup)
+// Derived Public Key (used internally)
+0x045f9c...
 
-// Derived address (Ethereum-style):
+// Ethereum-style Address:
 0x3f4eF9A628E49272B891fEb1738EcA47Bc3e3d0F
 ```
 
-## ✅ Use Cases & Testing
+---
 
-| Sender Address | Private Key | Recipient Address | Amount | Expected Result        |
-| -------------- | ----------- | ----------------- | ------ | ---------------------- |
-| `0x3f4e...`    | valid key   | `0x4b12...`       | 25     | Balance deducted/added |
-| Invalid key    | wrong key   | `0x4b12...`       | 25     | ❌ Signature rejected   |
-| Unknown wallet | n/a         | `0x4b12...`       | 10     | ❌ Rejected, no balance |
+## ✅ Sample Scenarios
+
+| Scenario                  | Result                    |
+|--------------------------|---------------------------|
+| Valid private key + sig  | ✅ Transfer succeeds       |
+| Invalid signature         | ❌ Transfer rejected       |
+| Unknown address           | ❌ No balance to send      |
+| Wrong private key         | ❌ Signature not verified  |
 
 ---
 
-## 📁 Project Structure
+## 🧩 Project Structure
 
 ```
 client/
-├— Wallet.jsx     # Handle wallet inputs and balance display
-├— Transfer.jsx   # Transfer form and signature logic
-├— server.js      # Axios instance
+├── App.jsx           # Root component
+├── Wallet.jsx        # Wallet UI + address derivation
+├── Transfer.jsx      # Transfer form and signing
+└── server.js         # Axios API config
+
 server/
-├— index.js       # Express server with signature validation
+├── index.js          # Express app with ECDSA signature validation
+└── utils/            # Signature & hash helpers
 ```
 
 ---
 
-## 📦 Libraries Used
+## 📦 Dependencies
 
-* [`ethereum-cryptography`](https://www.npmjs.com/package/ethereum-cryptography) – cryptographic primitives (secp256k1, keccak256)
-* `express`, `cors`, `nodemon` – server setup
-* `vite`, `react`, `useState` – frontend app
+- [`ethereum-cryptography`](https://www.npmjs.com/package/ethereum-cryptography) – cryptography (ECDSA, keccak256, secp256k1)
+- `express`, `cors`, `nodemon` – backend server
+- `vite`, `react`, `axios` – frontend stack
 
 ---
 
-## 🚀 Future Improvements
+## 🎓 Purpose
 
-* Add nonce or replay protection
-* Wallet generation with QR codes
-* Store balances persistently (e.g., in a file or DB)
-* Deploy to a cloud platform
+This project is designed for **educational purposes**—to provide hands-on understanding of how Ethereum wallets and digital signatures work under the hood, without dealing with the cost or complexity of mainnet or testnets.
 
+---
