@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { secp256k1 } from "ethereum-cryptography/secp256k1";
 import { keccak256 } from "ethereum-cryptography/keccak";
-import { utf8ToBytes, toHex, hexToBytes } from "ethereum-cryptography/utils";
+import { toHex, hexToBytes } from "ethereum-cryptography/utils";
 
 const app = express();
 const port = 3042;
@@ -35,10 +35,6 @@ wallets.forEach(({ address, balance }) => {
   balances[address.toLowerCase()] = balance;
 });
 
-function sortedJSONStringify(obj) {
-  return JSON.stringify(Object.fromEntries(Object.entries(obj).sort()));
-}
-
 // GET balance
 app.get("/balance/:address", (req, res) => {
   const address = req.params.address.toLowerCase();
@@ -47,37 +43,43 @@ app.get("/balance/:address", (req, res) => {
   res.send({ balance });
 });
 
-// POST send
-app.post("/send", async (req, res) => {
-  const { recipient, amount, signature, recoveryBit, message } = req.body;
-
-  console.log("Incoming transaction request:", { recipient, amount, message });
-
+// POST send - nueva lógica: validar privateKey para autorizar transferencia
+app.post("/send", (req, res) => {
   try {
-    let signatureBytes;
-    if (typeof signature === "string") {
-      signatureBytes = hexToBytes(signature);
-    } else if (signature instanceof Uint8Array) {
-      signatureBytes = signature;
-    } else {
-      throw new Error("Invalid signature format");
+    let { privateKey, recipient, amount } = req.body;
+
+    if (
+      !privateKey ||
+      typeof privateKey !== "string" ||
+      (privateKey.trim().length !== 64 && privateKey.trim().length !== 66)
+    ) {
+      return res.status(400).send({ message: "Invalid private key format." });
     }
 
-    const messageHash = keccak256(utf8ToBytes(sortedJSONStringify(message)));
+    privateKey = privateKey.toLowerCase().replace(/^0x/, "");
+    const privateKeyBytes = hexToBytes(privateKey);
 
-    const publicKey = secp256k1.recoverPublicKey(messageHash, signatureBytes, recoveryBit);
+    // Derivar address desde la private key
+    const publicKey = secp256k1.getPublicKey(privateKeyBytes, false);
     const senderAddress = "0x" + toHex(keccak256(publicKey.slice(1)).slice(-20));
+
     const sender = senderAddress.toLowerCase();
     const receiver = recipient.toLowerCase();
 
-    console.log("Recovered sender address:", sender);
+    if (!(sender in balances)) {
+      return res.status(401).send({ message: "Private key does not correspond to any wallet." });
+    }
+
+    if (typeof amount !== "number") amount = Number(amount);
+    if (!amount || amount <= 0) {
+      return res.status(400).send({ message: "Invalid amount." });
+    }
 
     setInitialBalance(sender);
     setInitialBalance(receiver);
 
     if (balances[sender] < amount) {
-      console.log("Transaction failed: insufficient funds");
-      return res.status(400).send({ message: "Not enough funds!" });
+      return res.status(400).send({ message: "Insufficient funds." });
     }
 
     balances[sender] -= amount;
@@ -86,8 +88,8 @@ app.post("/send", async (req, res) => {
     console.log(`Transaction successful: ${sender} sent ${amount} to ${receiver}`);
     res.send({ balance: balances[sender] });
   } catch (err) {
-    console.error("Transaction failed:", err.message);
-    res.status(400).send({ message: "Invalid signature or request.", detail: err.message });
+    console.error("Transaction failed:", err);
+    res.status(500).send({ message: "Server error." });
   }
 });
 
